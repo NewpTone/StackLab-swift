@@ -1,4 +1,4 @@
 [gerrit]
-host=review.openstack.org
-port=29418
+host=http://gerrit.sinasws.com/
+port=80
 project=openstack/swift.git
