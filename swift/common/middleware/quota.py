@@ -18,13 +18,12 @@ try:
 except Exception:
     import json
 
-import eventlet
 from webob import Request, Response
-from webob.exc import  HTTPForbidden
+from webob.exc import HTTPForbidden
 
 from swift.common.utils import split_path, cache_from_env, get_logger
 from swift.proxy.controllers.base import get_account_memcache_key, \
-        get_container_memcache_key
+    get_container_memcache_key
 
 
 class Quota(object):
@@ -37,26 +36,26 @@ class Quota(object):
         pipeline = catch_errors cache tempauth quota proxy-server
 
     And add a quota filter section, such as::
-   
+
         [filter:tempauth]
-        use = egg:swift#quota 
-            quota = {
-                "container_count": {
-                    "default": 5,
-                    "L1": 10,
-                    "L2": 25,
-                },
-                "object_count": {
-                    "default": 200000,
-                    "L1": 500000,
-                    "L2": 1000000,
-                },
-                "container_usage": {
-                    "default": 2147483648,
-                    "L1": 10737418240,
-                    "L2": 53687091200,
-                }
+        use = egg:swift#quota
+        quota = {
+            "container_count": {
+                "default": 5,
+                "L1": 10,
+                "L2": 25,
+            },
+            "object_count": {
+                "default": 200000,
+                "L1": 500000,
+                "L2": 1000000,
+            },
+            "container_usage": {
+                "default": 2147483648,
+                "L1": 10737418240,
+                "L2": 53687091200,
             }
+        }
     See the proxy-server.conf-sample for more information.
 
     :param app: The next WSGI app in the pipeline
@@ -86,13 +85,14 @@ class Quota(object):
          to accomplish directly.
         """
         new_env = {'REQUEST_METHOD': 'GET',
-                'HTTP_USER_AGENT': '%s Quota' % env.get('HTTP_USER_AGENT')}
-        for name in ('eventlet.posthooks', 'swift.trans_id', 'REMOTE_USER', 
+                   'HTTP_USER_AGENT': '%s Quota' % env.get('HTTP_USER_AGENT')}
+        for name in ('eventlet.posthooks', 'swift.trans_id', 'REMOTE_USER',
                      'SCRIPT_NAME', 'SERVER_NAME', 'SERVER_PORT',
                      'SERVER_PROTOCOL', 'swift.cache'):
             if name in env:
                 new_env[name] = env[name]
         return new_env
+
     def update_request(self, req):
         req.bytes_transferred = '-'
         req.client_disconnect = False
@@ -102,9 +102,10 @@ class Quota(object):
             return req
 
     def handle_quota_container(self, env, start_response, version, account,
-            container):
+                               container):
         res = [None, None, None]
         req = self.update_request(Request(env))
+
         def _start_response(response_status, response_headers, exc_info=None):
             res[0] = response_status
             res[1] = response_headers
@@ -123,30 +124,29 @@ class Quota(object):
             else:
                 result_code = cache_value.get('status')
                 container_count_num = int(
-                        cache_value.get('container_count') or 0)
+                    cache_value.get('container_count') or 0)
                 quota_level = cache_value.get('quota_level') or 'default'
                 if container_count_num >= int(
                         self.container_count[quota_level]):
                     #return self.app(env, start_response)
-                    print container_count_num,req
+                    print container_count_num, req
                     #return HTTPForbidden(
                     #        request=req, content_type='text/plain',
                     #        body='The container count over quota.'
                     #)
                 else:
                     self.app.memcache.set(
-                            cache_key,
-                            {
-                                'status': result_code,
-                                'container_count': container_count_num + 1,
-                                'quota_level': quota_level
-                            }
+                        cache_key, {
+                            'status': result_code,
+                            'container_count': container_count_num + 1,
+                            'quota_level': quota_level
+                        }
                     )
                     return self.app(env, start_response)
-        resp = self.app(tem_env,  _start_response)
+        resp = self.app(tem_env, _start_response)
         result_code = self._get_status_int(res[0])
         container_count_num = int(
-                dict(res[1])['x-account-container-count'] or 0)
+            dict(res[1])['x-account-container-count'] or 0)
         if 'x-account-meta-quota' not in res[1]:
             dict(res[1])['x-account-meta-quota'] = 'default'
             quota_level = 'default'
@@ -162,21 +162,20 @@ class Quota(object):
         else:
             cache_key = get_account_memcache_key(account)
             self.app.memcache.set(
-                    cache_key,
-                    {
-                        'status': result_code,
-                        'container_count': container_count_num + 1,
-                        'quota_level': quota_level
-                    }
+                cache_key, {
+                    'status': result_code,
+                    'container_count': container_count_num + 1,
+                    'quota_level': quota_level
+                }
             )
             print res[1], result_code, container_count_num,\
-                    quota_level, self.container_count[quota_level]
+                quota_level, self.container_count[quota_level]
             return self.app(env, start_response)
 
     def handle_quota_object(self, env, start_response, version, account,
-            container, obj):
+                            container, obj):
         res = [None, None, None]
-        
+
         def _start_response(response_status, response_headers, exc_info=None):
             res[0] = response_status
             res[1] = response_headers
@@ -196,10 +195,10 @@ class Quota(object):
             else:
                 result_code = cache_value.get('status')
                 object_count_num = int(
-                        cache_value.get('object_count') or 0)
-                resp = self.app(tem_env,  _start_response)
+                    cache_value.get('object_count') or 0)
+                resp = self.app(tem_env, _start_response)
                 container_usage_num = int(
-                        dict(res[1])['container_usage'] or 0)
+                    dict(res[1])['container_usage'] or 0)
                 quota_level = cache_value.get('quota_level') or 'default'
                 if object_count_num >= self.object_count[quota_level]:
                     return self.app(env, start_response)
@@ -207,20 +206,19 @@ class Quota(object):
                     return self.app(env, start_response)
                 else:
                     self.app.memcache.set(
-                            cache_key,
-                            {
-                                'status': result_code,
-                                'object_count': object_count_num,
-                                'container_usage': container_usage_num
-                            }
+                        cache_key, {
+                            'status': result_code,
+                            'object_count': object_count_num,
+                            'container_usage': container_usage_num
+                        }
                     )
                     return self.app(env, start_response)
-        resp = self.app(tem_env,  _start_response)
+        resp = self.app(tem_env, _start_response)
         result_code = self._get_status_int(res[0])
         object_count_num = int(
-                dict(res[1])['x-container-object-count'] or 0)
+            dict(res[1])['x-container-object-count'] or 0)
         container_usage_num = int(
-                dict(res[1])['x-container-bytes-used'] or 0)
+            dict(res[1])['x-container-bytes-used'] or 0)
         if 'quota_level' not in res[1]:
             dict(res[1])['x-account-meta-quota'] = 'default'
             quota_level = 'default'
@@ -233,34 +231,32 @@ class Quota(object):
         else:
             cache_key = get_container_memcache_key(account, container)
             self.app.memcache.set(
-                    cache_key,
-                    {
-                        'status': result_code,
-                        'object_count': object_count_num,
-                        'container_usage': container_usage_num
-                    }
-            )
+                cache_key, {
+                    'status': result_code,
+                    'object_count': object_count_num,
+                    'container_usage': container_usage_num
+                })
             return self.app(env, start_response)
 
     def __call__(self, env, start_response):
-        """ 
-        WSGI entry point.                                                       
-        Wraps env in webob.Request object and passes it down.                                                  
+        """
+        WSGI entry point.
+        Wraps env in webob.Request object and passes it down.
         :param env: WSGI environment dictionary
         :param start_response: WSGI callable
         """
         try:
             (version, account, container, obj) = \
-                    split_path(env['PATH_INFO'], 1, 4, True)
+                split_path(env['PATH_INFO'], 1, 4, True)
         except ValueError:
             return self.app(env, start_response)
         if env['REQUEST_METHOD'] == 'PUT':
             if not obj and container:
                 return self.handle_quota_container(
-                        env, start_response, version, account, container)
+                    env, start_response, version, account, container)
             if obj and container:
                 return self.handle_quota_object(
-                        env, start_response, version, account, container, obj)
+                    env, start_response, version, account, container, obj)
         return self.app(env, start_response)
 
 
