@@ -43,17 +43,17 @@ class Quota(object):
             "container_count": {
                 "default": 5,
                 "L1": 10,
-                "L2": 25,
+                "L2": 25
             },
             "object_count": {
                 "default": 200000,
                 "L1": 500000,
-                "L2": 1000000,
+                "L2": 1000000
             },
             "container_usage": {
                 "default": 2147483648,
                 "L1": 10737418240,
-                "L2": 53687091200,
+                "L2": 53687091200
             }
         }
     See the proxy-server.conf-sample for more information.
