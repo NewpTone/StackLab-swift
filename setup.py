@@ -95,6 +95,7 @@ setup(
             'name_check=swift.common.middleware.name_check:filter_factory',
             'proxy_logging=swift.common.middleware.proxy_logging:'
                 'filter_factory',
+            'quota=swift.common.middleware.quota:filter_factory',
             ],
         },
     )
