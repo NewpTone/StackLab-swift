@@ -39,6 +39,7 @@ class Quota(object):
 
         [filter:tempauth]
         use = egg:swift#quota
+        set log_name = quota
         quota = {
             "container_count": {
                 "default": 5,
@@ -63,6 +64,7 @@ class Quota(object):
     """
     def __init__(self, app, conf):
         self.app = app
+        self.logger = get_logger(conf, log_route=conf.get('log_name', 'quota'))
         try:
             quota = json.loads(conf.get('quota') or "{}")
             self.container_count = quota['container_count']
