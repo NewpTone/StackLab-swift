@@ -14,6 +14,8 @@
 # limitations under the License.
 
 import unittest
+from webob import Response
+from contextlib import contextmanager
 
 from swift.common.middleware import quota
 
@@ -27,31 +29,45 @@ QUOTA_E6 = '{"object_count": {"default": 200000}, "container_count": {"default":
 
 
 class FakeMemcache(object):
+
     def __init__(self):
         self.store = {}
 
     def get(self, key):
         return self.store.get(key)
 
-    def set(self, key, value):
+    def set(self, key, value, timeout=0):
         self.store[key] = value
         return True
+
+    def incr(self, key, timeout=0):
+        self.store[key] = self.store.setdefault(key, 0) + 1
+        return self.store[key]
+
+    @contextmanager
+    def soft_lock(self, key, timeout=0, retries=5):
+        yield True
 
     def delete(self, key):
         try:
             del self.store[key]
-        except:
+        except Exception:
             pass
         return True
 
 
 class FakeApp(object):
-
     def __init__(self):
         pass
 
-    def __call__(self):
-        pass
+    def __call__(self, env, start_response):
+        if env['PATH_INFO'] == '/':
+            return Response(status='404 Not Found')(env, start_response)
+        elif env['PATH_INFO'] == '/v1':
+            return Response(
+                status='412 Precondition Failed')(env, start_response)
+        elif env['PATH_INFO'] == '/v1/a':
+            return Response(status='401 Unauthorized')(env, start_response)
 
 
 class TestReadConfiguration(unittest.TestCase):
@@ -71,7 +87,6 @@ class TestReadConfiguration(unittest.TestCase):
     def test_read_conf_e(self):
         try:
             quota_filter = quota.filter_factory({"quota": QUOTA_E1})(FakeApp())
-            self.assertNotEqual(quota_filter.container_count['default'], None)
         except Exception:
             self.assertTrue(True)
         else:
@@ -79,7 +94,6 @@ class TestReadConfiguration(unittest.TestCase):
 
         try:
             quota_filter = quota.filter_factory({"quota": QUOTA_E2})(FakeApp())
-            self.assertNotEqual(quota_filter.object_count['default'], None)
         except Exception:
             self.assertTrue(True)
         else:
@@ -87,7 +101,6 @@ class TestReadConfiguration(unittest.TestCase):
 
         try:
             quota_filter = quota.filter_factory({"quota": QUOTA_E3})(FakeApp())
-            self.assertNotEqual(quota_filter.container_usage['default'], None)
         except Exception:
             self.assertTrue(True)
         else:
@@ -95,7 +108,6 @@ class TestReadConfiguration(unittest.TestCase):
 
         try:
             quota_filter = quota.filter_factory({"quota": QUOTA_E4})(FakeApp())
-            self.assertNotEqual(quota_filter.container_count, None)
         except Exception:
             self.assertTrue(True)
         else:
@@ -103,7 +115,6 @@ class TestReadConfiguration(unittest.TestCase):
 
         try:
             quota_filter = quota.filter_factory({"quota": QUOTA_E5})(FakeApp())
-            self.assertNotEqual(quota_filter.object_count, None)
         except Exception:
             self.assertTrue(True)
         else:
@@ -111,27 +122,32 @@ class TestReadConfiguration(unittest.TestCase):
 
         try:
             quota_filter = quota.filter_factory({"quota": QUOTA_E6})(FakeApp())
-            self.assertNotEqual(quota_filter.container_usage, None)
         except Exception:
             self.assertTrue(True)
         else:
             self.fail("No specific options.")
-            
-    def test_call_invalid_path(self):
-        env = {'REQUEST_METHOD': 'GET',
-               'SCRIPT_NAME': '',
-               'PATH_INFO': '//v1/AUTH_1234567890',
-               'SERVER_NAME': '127.0.0.1',
-               'SERVER_PORT': '80',
-               'swift.cache': FakeMemcache(),
-               'SERVER_PROTOCOL': 'HTTP/1.0'}
 
-    def test_memcache_read(self):
+
+class TestQuota(unittest.TestCase):
+    def setUp(self):
+        self.conf = {'quota': QUOTA}
+
+    def test_app_set(self):
+        app = FakeApp()
+        qa = quota.filter_factory(self.conf)(app)
+        self.assertEquals(qa.app, app)
+
+    def test_cache_timeout_set(self):
+        self.conf['cache_timeout'] = 500
+        qa = quota.filter_factory(self.conf)(FakeApp())
+        self.assertEquals(qa.cache_timeout, 500)
+
+    def test_cache_timeout_unset(self):
+        qa = quota.filter_factory(self.conf)(FakeApp())
+        self.assertEquals(qa.cache_timeout, 300)
+
+    def test_invalid_path(self):
         pass
-
-    def test_quota_handrequest(self):
-        pass
-
 
 if __name__ == '__main__':
     unittest.main()
