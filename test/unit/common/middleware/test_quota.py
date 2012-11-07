@@ -14,7 +14,7 @@
 # limitations under the License.
 
 import unittest
-from webob import Response
+from webob import Response, Request
 from contextlib import contextmanager
 
 from swift.common.middleware import quota
@@ -68,6 +68,46 @@ class FakeApp(object):
                 status='412 Precondition Failed')(env, start_response)
         elif env['PATH_INFO'] == '/v1/a':
             return Response(status='401 Unauthorized')(env, start_response)
+        elif env['PATH_INFO'] == '/v1/a-c2-qdefault':
+            headers = {
+                'X-Account-Container-Count': 2,
+                'X-Account-Object-Count': 100,
+                'X-Account-Bytes-Used': 1024,
+            }
+            return Response(status='200 OK', headers=headers)(
+                env, start_response)
+        elif env['PATH_INFO'] == '/v1/a-c2-qdefault/c':
+            return Response(status='201 Created')(env, start_response)
+        elif env['PATH_INFO'] == '/v1/a-c4-qdefault':
+            headers = {
+                'X-Account-Container-Count': 4,
+                'X-Account-Object-Count': 100,
+                'X-Account-Bytes-Used': 1024,
+            }
+            return Response(status='200 OK', headers=headers)(
+                env, start_response)
+        elif env['PATH_INFO'] == '/v1/a-c4-qdefault/c':
+            return Response(status='201 Created')(env, start_response)
+        elif env['PATH_INFO'] == '/v1/a-c5-qdefault':
+            headers = {
+                'X-Account-Container-Count': 5,
+                'X-Account-Object-Count': 100,
+                'X-Account-Bytes-Used': 1024,
+            }
+            return Response(status='200 OK', headers=headers)(
+                env, start_response)
+        elif env['PATH_INFO'] == '/v1/a-c8-ql1':
+            headers = {
+                'X-Account-Container-Count': 8,
+                'X-Account-Object-Count': 100,
+                'X-Account-Bytes-Used': 1024,
+                'X-Account-Meta-Quota': 'L1',
+            }
+            return Response(status='200 OK', headers=headers)(
+                env, start_response)
+        elif env['PATH_INFO'] == '/v1/a-c8-ql1/c':
+            return Response(status='201 Created')(env, start_response)
+
 
 
 class TestReadConfiguration(unittest.TestCase):
@@ -130,24 +170,102 @@ class TestReadConfiguration(unittest.TestCase):
 
 class TestQuota(unittest.TestCase):
     def setUp(self):
-        self.conf = {'quota': QUOTA}
+        self.conf = {
+            'quota': QUOTA,
+            'log_name': 'quota',
+            'cache_timeout': 500
+        }
 
     def test_app_set(self):
         app = FakeApp()
         qa = quota.filter_factory(self.conf)(app)
         self.assertEquals(qa.app, app)
 
+    def test_logger_set(self):
+        qa = quota.filter_factory(self.conf)(FakeApp())
+        self.assertEquals(qa.logger.server, 'quota')
+
     def test_cache_timeout_set(self):
-        self.conf['cache_timeout'] = 500
         qa = quota.filter_factory(self.conf)(FakeApp())
         self.assertEquals(qa.cache_timeout, 500)
 
     def test_cache_timeout_unset(self):
+        self.conf.pop('cache_timeout')
         qa = quota.filter_factory(self.conf)(FakeApp())
         self.assertEquals(qa.cache_timeout, 300)
 
     def test_invalid_path(self):
-        pass
+        qa = quota.filter_factory(self.conf)(FakeApp())
+        resp = Request.blank('/').get_response(qa)
+        self.assertEquals(resp.status_int, 404)
+        resp = Request.blank('/v1').get_response(qa)
+        self.assertEquals(resp.status_int, 412)
+        resp = Request.blank('/v1/a').get_response(qa)
+        self.assertEquals(resp.status_int, 401)
+
+    def test_quota_default_ok(self):
+        qa = quota.filter_factory(self.conf)(FakeApp())
+        req = Request.blank('/v1/a-c2-qdefault/c')
+        req.method = 'PUT'
+        # no memcached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+        # no cache
+        req.environ[swift.cache] = FakeMemcache() 
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+        # cached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+
+    def test_quota_default_boundary(self):
+        qa = quota.filter_factory(self.conf)(FakeApp())
+        req = Request.blank('/v1/a-c4-qdefault/c')
+        req.method = 'PUT'
+        # no memcached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+        # no cache
+        req.environ[swift.cache] = FakeMemcache() 
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+        # cached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+
+    def test_quota_default_fail(self):
+        qa = quota.filter_factory(self.conf)(FakeApp())
+        req = Request.blank('/v1/a-c5-qdefault/c')
+        req.method = 'PUT'
+        # no memcached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 403)
+        self.assertEquals(resp.body, 'The number of container is over quota')
+        # no cache
+        req.environ[swift.cache] = FakeMemcache() 
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 403)
+        self.assertEquals(resp.body, 'The number of container is over quota')
+        # cached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 403)
+        self.assertEquals(resp.body, 'The number of container is over quota')
+    
+    def test_quota_l1_ok(self):
+        qa = quota.filter_factory(self.conf)(FakeApp())
+        req = Request.blank('/v1/a-c4-ql1/c')
+        req.method = 'PUT'
+        # no memcached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+        # no cache
+        req.environ[swift.cache] = FakeMemcache() 
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+        # cached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+
 
 if __name__ == '__main__':
     unittest.main()
