@@ -109,6 +109,7 @@ class Quota(object):
         value = None
         quota_level = None
         res = [None, None, None]
+        result_code = None
 
         def _start_response(response_status, response_headers, exc_info=None):
             res[0] = response_status
@@ -135,14 +136,14 @@ class Quota(object):
             temp_env['PATH_INFO'] = '/%s/%s' % (version, account)
             resp = self.app(temp_env, _start_response)
             self.logger.debug(
-                'value form account-server status[%s] header[%s]' % res[0],
-                res[1])
+                'value form account-server status[%s] header[%s]' % (res[0],
+                res[1]))
             result_code = self._get_status_int(res[0])
             if is_success(result_code):
                 headers = dict(res[1])
                 container_count = int(
-                    headers.get('x-account-container-count') or 0)
-                quota_level = headers.get('x-account-meta-quota') or 'default'
+                    headers.get('X-Account-Container-Count') or 0)
+                quota_level = headers.get('X-Account-Meta-Quota') or 'default'
                 if memcache_client:
                     memcache_client.set(
                         account_key,
@@ -156,7 +157,13 @@ class Quota(object):
             else:
                 return self.app(env, start_response)
         # handle quota
-        if container_count + 1 > self.container_count[quota_level]:
+        try:
+            quota = self.container_count[quota_level]
+        except Exception:
+            self.logger.warn('Invalid quota_leve %s/%s quota_level[%s].' % (
+                account, container, quota_level))
+            quota = None
+        if quota and container_count + 1 > quota:
             self.logger.notice("Over quota, request[PUT %s/%s], "
                                "container_count[%s] quota[%s]" % (
                                    account, container, container_count + 1,

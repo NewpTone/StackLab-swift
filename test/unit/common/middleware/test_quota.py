@@ -18,6 +18,7 @@ from webob import Response, Request
 from contextlib import contextmanager
 
 from swift.common.middleware import quota
+from swift.common.utils import json
 
 QUOTA = '{"object_count": {"default": 200000, "L2": 1000000, "L1": 500000}, "container_count": {"default": 5, "L2": 25, "L1": 10}, "container_usage": {"default": 2147483648, "L1": 5368709120, "L2": 10737418240}}'
 QUOTA_E1 = '{"object_count": {"default": 200000}, "container_count": {}, "container_usage": {"default": 2147483648}}'
@@ -109,7 +110,6 @@ class FakeApp(object):
             return Response(status='201 Created')(env, start_response)
 
 
-
 class TestReadConfiguration(unittest.TestCase):
     def test_read_conf(self):
         quota_filter = quota.filter_factory({"quota": QUOTA})(FakeApp())
@@ -173,7 +173,8 @@ class TestQuota(unittest.TestCase):
         self.conf = {
             'quota': QUOTA,
             'log_name': 'quota',
-            'cache_timeout': 500
+            'cache_timeout': 500,
+            'log_level': 'DEBUG',
         }
 
     def test_app_set(self):
@@ -203,7 +204,7 @@ class TestQuota(unittest.TestCase):
         resp = Request.blank('/v1/a').get_response(qa)
         self.assertEquals(resp.status_int, 401)
 
-    def test_quota_default_ok(self):
+    def test_container_quota_default_ok(self):
         qa = quota.filter_factory(self.conf)(FakeApp())
         req = Request.blank('/v1/a-c2-qdefault/c')
         req.method = 'PUT'
@@ -211,14 +212,14 @@ class TestQuota(unittest.TestCase):
         resp = req.get_response(qa)
         self.assertEquals(resp.status_int, 201)
         # no cache
-        req.environ[swift.cache] = FakeMemcache() 
+        req.environ['swift.cache'] = FakeMemcache()
         resp = req.get_response(qa)
         self.assertEquals(resp.status_int, 201)
         # cached
         resp = req.get_response(qa)
         self.assertEquals(resp.status_int, 201)
 
-    def test_quota_default_boundary(self):
+    def test_container_quota_default_boundary(self):
         qa = quota.filter_factory(self.conf)(FakeApp())
         req = Request.blank('/v1/a-c4-qdefault/c')
         req.method = 'PUT'
@@ -226,14 +227,14 @@ class TestQuota(unittest.TestCase):
         resp = req.get_response(qa)
         self.assertEquals(resp.status_int, 201)
         # no cache
-        req.environ[swift.cache] = FakeMemcache() 
+        req.environ['swift.cache'] = FakeMemcache()
         resp = req.get_response(qa)
         self.assertEquals(resp.status_int, 201)
         # cached
         resp = req.get_response(qa)
         self.assertEquals(resp.status_int, 201)
 
-    def test_quota_default_fail(self):
+    def test_container_quota_default_fail(self):
         qa = quota.filter_factory(self.conf)(FakeApp())
         req = Request.blank('/v1/a-c5-qdefault/c')
         req.method = 'PUT'
@@ -242,7 +243,7 @@ class TestQuota(unittest.TestCase):
         self.assertEquals(resp.status_int, 403)
         self.assertEquals(resp.body, 'The number of container is over quota')
         # no cache
-        req.environ[swift.cache] = FakeMemcache() 
+        req.environ['swift.cache'] = FakeMemcache()
         resp = req.get_response(qa)
         self.assertEquals(resp.status_int, 403)
         self.assertEquals(resp.body, 'The number of container is over quota')
@@ -250,22 +251,52 @@ class TestQuota(unittest.TestCase):
         resp = req.get_response(qa)
         self.assertEquals(resp.status_int, 403)
         self.assertEquals(resp.body, 'The number of container is over quota')
-    
-    def test_quota_l1_ok(self):
+
+    def test_container_quota_l1_ok(self):
         qa = quota.filter_factory(self.conf)(FakeApp())
-        req = Request.blank('/v1/a-c4-ql1/c')
+        req = Request.blank('/v1/a-c8-ql1/c')
         req.method = 'PUT'
         # no memcached
         resp = req.get_response(qa)
         self.assertEquals(resp.status_int, 201)
         # no cache
-        req.environ[swift.cache] = FakeMemcache() 
+        req.environ['swift.cache'] = FakeMemcache()
         resp = req.get_response(qa)
         self.assertEquals(resp.status_int, 201)
         # cached
         resp = req.get_response(qa)
         self.assertEquals(resp.status_int, 201)
 
+    def test_container_quota_error_key(self):
+        self.conf['quota'] = json.dumps(
+            {
+                'container_count': {
+                    'default': 5,
+                    'L10': 10
+                },
+                'object_count': {
+                    'default': 5,
+                    'L10': 10
+                },
+                'container_usage': {
+                    'default': 5,
+                    'L10': 10
+                }
+            }
+        )
+        qa = quota.filter_factory(self.conf)(FakeApp())
+        req = Request.blank('/v1/a-c8-ql1/c')
+        req.method = 'PUT'
+        # no memcached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+        # no cache
+        req.environ['swift.cache'] = FakeMemcache()
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+        # cached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
 
 if __name__ == '__main__':
     unittest.main()
