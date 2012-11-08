@@ -13,13 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-try:
-    import simplejson as json
-except Exception:
-    import json
 from webob.exc import HTTPForbidden
 
-from swift.common.utils import split_path, cache_from_env, get_logger
+from swift.common.utils import json, split_path, cache_from_env, get_logger
 from swift.common.http import is_success
 from swift.proxy.controllers.base import get_account_memcache_key, \
     get_container_memcache_key
@@ -102,12 +98,19 @@ class Quota(object):
                 new_env[name] = env[name]
         return new_env
 
-    def handle_quota_container(self, env, start_response, version, account,
-                               container):
-        """ Container Count Quota """
+    def _get_account_meta(self, env, version, account):
+        """
+        Get metadata of account.
+
+        :param env: The WSGI environment
+        :param version: The api version in PATH_INFO
+        :param account: The name of account
+        :return: tuple of (container_count, quota_level) or (None, None)
+        """
         memcache_client = cache_from_env(env)
         value = None
         quota_level = None
+        container_count = None
         res = [None, None, None]
         result_code = None
 
@@ -129,6 +132,7 @@ class Quota(object):
             # get from memcached
             container_count = int(value.get('container_count') or 0)
             quota_level = value.get('quota_level') or 'default'
+            return container_count, quota_level
         else:
             # get from account-server
             temp_env = self._get_escalated_env(env)
@@ -154,20 +158,99 @@ class Quota(object):
                         },
                         timeout=self.cache_timeout
                     )
+                return container_count, quota_level
             else:
-                return self.app(env, start_response)
-        # handle quota
+                return None, None
+
+    def _get_container_meta(self, env, version, account, container):
+        """
+        Get metadata of account.
+
+        :param env: The WSGI environment
+        :param version: The api version in PATH_INFO
+        :param account: The name of account
+        :param container: The name of container
+        :return: tuple of (container_usage, object_count) or (None, None)
+        """
+        memcache_client = cache_from_env(env)
+        value = None
+        container_usage = None
+        object_count = None
+        res = [None, None, None]
+        result_code = None
+
+        def _start_response(response_status, response_headers, exc_info=None):
+            res[0] = response_status
+            res[1] = response_headers
+            res[2] = exc_info
+        # get container_usage and object_count
+        container_key = get_container_memcache_key(account, container)
+        if memcache_client:
+            value = memcache_client.get(container_key)
+        if value:
+            self.logger.debug('value from mc: %s' % (value))
+            if not isinstance(value, dict):
+                result_code = value
+            else:
+                result_code = value.get('status')
+        if is_success(result_code):
+            # get from memcached
+            container_usage = int(value.get('container_usage') or 0)
+            object_count = int(value.get('container_size') or 0)
+            return container_usage, object_count
+        else:
+            temp_env = self._get_escalated_env(env)
+            temp_env['REQUEST_METHOD'] = 'HEAD'
+            temp_env['PATH_INFO'] = '/%s/%s/%s' % (version, account, container)
+            resp = self.app(temp_env, _start_response)
+            self.logger.debug(
+                'value form container-server status[%s] header[%s]' % (res[0],
+                res[1]))
+            result_code = self._get_status_int(res[0])
+            if is_success(result_code):
+                headers = dict(res[1])
+                container_usage = int(
+                    headers.get('X-Container-Bytes-Used') or 0)
+                object_count = int(
+                    headers.get('X-Container-Object-Count') or 0)
+                read_acl = headers.get('X-Container-Read') or ''
+                write_acl = headers.get('X-Container-Write') or ''
+                sync_key = headers.get('X-Container-Sync-Key') or ''
+                container_version = headers.get('X-Versions-Location') or ''
+                if memcache_client:
+                    memcache_client.set(
+                        container_key,
+                        {
+                            'status': result_code,
+                            'read_acl': read_acl,
+                            'write_acl': write_acl,
+                            'sync_key': sync_key,
+                            'container_size': object_count,
+                            'versions': container_version,
+                            'container_usage': container_usage
+                        },
+                        timeout=self.cache_timeout
+                    )
+                return container_usage, object_count
+            else:
+                return None, None
+
+    def handle_quota_container(self, env, start_response, version, account,
+                               container):
+        """ Container Count Quota """
+        container_count, quota_level = self._get_account_meta(
+            env, version, account)
         try:
             quota = self.container_count[quota_level]
         except Exception:
             self.logger.warn('Invalid quota_leve %s/%s quota_level[%s].' % (
                 account, container, quota_level))
             quota = None
-        if quota and container_count + 1 > quota:
-            self.logger.notice("Over quota, request[PUT %s/%s], "
-                               "container_count[%s] quota[%s]" % (
+        if quota and container_count and container_count + 1 > quota:
+            self.logger.notice("Container count over quota, request[PUT %s/%s],"
+                               " container_count[%s] quota[%s]" % (
                                    account, container, container_count + 1,
-                                   self.container_count[quota_level]))
+                                   quota))
             return HTTPForbidden(body="The number of container is over quota")(
                 env, start_response)
         else:
@@ -175,68 +258,37 @@ class Quota(object):
 
     def handle_quota_object(self, env, start_response, version, account,
                             container, obj):
-        res = [None, None, None]
-
-        def _start_response(response_status, response_headers, exc_info=None):
-            res[0] = response_status
-            res[1] = response_headers
-            res[2] = exc_info
-
-        tem_env = self._get_escalated_env(env)
-        tem_env['REQUEST_METHOD'] = 'HEAD'
-        tem_env['PATH_INFO'] = '/%s/%s/%s' % (version, account, container)
-        self.app.memcache = None
-        if self.app.memcache:
-            cache_key = get_container_memcache_key(account, container)
-            cache_value = self.app.memcache.get(cache_key)
-            if not isinstance(cache_value, dict):
-                result_code = cache_value
-                object_count_num = 0
-                container_usage_num = 0
-            else:
-                result_code = cache_value.get('status')
-                object_count_num = int(
-                    cache_value.get('object_count') or 0)
-                resp = self.app(tem_env, _start_response)
-                container_usage_num = int(
-                    dict(res[1])['container_usage'] or 0)
-                quota_level = cache_value.get('quota_level') or 'default'
-                if object_count_num >= self.object_count[quota_level]:
-                    return self.app(env, start_response)
-                elif container_usage_num >= self.container_usage[quota_level]:
-                    return self.app(env, start_response)
-                else:
-                    self.app.memcache.set(
-                        cache_key, {
-                            'status': result_code,
-                            'object_count': object_count_num,
-                            'container_usage': container_usage_num
-                        }
-                    )
-                    return self.app(env, start_response)
-        resp = self.app(tem_env, _start_response)
-        result_code = self._get_status_int(res[0])
-        object_count_num = int(
-            dict(res[1])['x-container-object-count'] or 0)
-        container_usage_num = int(
-            dict(res[1])['x-container-bytes-used'] or 0)
-        if 'quota_level' not in res[1]:
-            dict(res[1])['x-account-meta-quota'] = 'default'
-            quota_level = 'default'
+        """ Handle quota of container usage and object count. """
+        object_size = int(env.get('CONTENT_LENGTH') or 0)
+        container_count, quota_level = self._get_account_meta(
+            env, version, account)
+        try:
+            container_usage_quota = self.container_usage[quota_level]
+            object_count_quota = self.object_count[quota_level]
+        except Exception:
+            self.logger.warn('Invalid quota_leve %s/%s quota_level[%s].' % (
+                account, container, quota_level))
+            container_usage_quota = None
+            object_count_quota = None
+        container_usage, object_count = self._get_container_meta(
+            env, version, account, container)
+        if container_usage_quota and (container_usage + object_size >
+                                      container_usage_quota):
+            self.logger.notice("Container usage over quota, "
+                               "request[PUT %s/%s/%s], container_usage[%s] "
+                               "object_size[%s] quota[%s]" % (
+                                   account, container, obj, container_usage,
+                                   object_size, container_usage_quota))
+            return HTTPForbidden(body="The usage of container is over quota")(
+                env, start_response)
+        elif object_count_quota and object_count + 1 > object_count_quota:
+            self.logger.notice("Object count over quota, request[PUT %s/%s/%s],"
+                               "object_count[%s] quota[%s]" % (
+                                   account, container, obj, object_count + 1,
+                                   object_count_quota))
+            return HTTPForbidden(body="The usage of container is over quota")(
+                env, start_response)
         else:
-            quota_level = dict(res[1])['x-account-meta-quota'] or 'default'
-        if object_count_num >= self.object_count[quota_level]:
-            return self.app(env, start_response)
-        elif container_usage_num >= self.container_usage[quota_level]:
-            return self.app(env, start_response)
-        else:
-            cache_key = get_container_memcache_key(account, container)
-            self.app.memcache.set(
-                cache_key, {
-                    'status': result_code,
-                    'object_count': object_count_num,
-                    'container_usage': container_usage_num
-                })
             return self.app(env, start_response)
 
     def __call__(self, env, start_response):

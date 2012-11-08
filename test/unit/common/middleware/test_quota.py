@@ -108,6 +108,111 @@ class FakeApp(object):
                 env, start_response)
         elif env['PATH_INFO'] == '/v1/a-c8-ql1/c':
             return Response(status='201 Created')(env, start_response)
+        elif env['PATH_INFO'] == '/v1/a1':
+            headers = {
+                'X-Account-Container-Count': 2,
+                'X-Account-Object-Count': 100,
+                'X-Account-Bytes-Used': 1024,
+            }
+            return Response(status='200 OK', headers=headers)(
+                env, start_response)
+        elif env['PATH_INFO'] == '/v1/a1/c':
+            headers = {
+                'X-Container-Object-Count': 100,
+                'X-Container-Bytes-Used': 200,
+            }
+            return Response(status='204 No Content', headers=headers)(
+                env, start_response)
+        elif env['PATH_INFO'] == '/v1/a1/c/obj':
+            return Response(status='201 Created')(env, start_response)
+        elif env['PATH_INFO'] == '/v1/a1/c/obj1':
+            return Response(status='500 Internal Server Error')(
+                env, start_response)
+        elif env['PATH_INFO'] == '/v1/a1/c2':
+            headers = {
+                'X-Container-Object-Count': 100,
+                'X-Container-Bytes-Used': 2147483648 - 1024,
+            }
+            return Response(status='204 No Content', headers=headers)(
+                env, start_response)
+        elif env['PATH_INFO'] == '/v1/a1/c2/obj':
+            return Response(status='201 Created')(env, start_response)
+        elif env['PATH_INFO'] == '/v1/a1/c3':
+            headers = {
+                'X-Container-Object-Count': 100,
+                'X-Container-Bytes-Used': 2147483648 + 1024,
+            }
+            return Response(status='204 No Content', headers=headers)(
+                env, start_response)
+        elif env['PATH_INFO'] == '/v1/a2':
+            headers = {
+                'X-Account-Container-Count': 2,
+                'X-Account-Object-Count': 100,
+                'X-Account-Bytes-Used': 1024,
+                'X-Account-Meta-Quota': 'L1'
+            }
+            return Response(status='200 OK', headers=headers)(
+                env, start_response)
+        elif env['PATH_INFO'] == '/v1/a2/c':
+            headers = {
+                'X-Container-Object-Count': 100,
+                'X-Container-Bytes-Used': 2147483648,
+            }
+            return Response(status='204 No Content', headers=headers)(
+                env, start_response)
+        elif env['PATH_INFO'] == '/v1/a2/c/obj':
+            return Response(status='201 Created')(env, start_response)
+        elif env['PATH_INFO'] == '/v1/a3':
+            headers = {
+                'X-Account-Container-Count': 2,
+                'X-Account-Object-Count': 100,
+                'X-Account-Bytes-Used': 1024,
+            }
+            return Response(status='200 OK', headers=headers)(
+                env, start_response)
+        elif env['PATH_INFO'] == '/v1/a3/c':
+            headers = {
+                'X-Container-Object-Count': 100,
+                'X-Container-Bytes-Used': 1024,
+            }
+            return Response(status='204 No Content', headers=headers)(
+                env, start_response)
+        elif env['PATH_INFO'] == '/v1/a3/c/obj':
+            return Response(status='201 Created')(env, start_response)
+        elif env['PATH_INFO'] == '/v1/a3/c1':
+            headers = {
+                'X-Container-Object-Count': 99999,
+                'X-Container-Bytes-Used': 1024,
+            }
+            return Response(status='204 No Content', headers=headers)(
+                env, start_response)
+        elif env['PATH_INFO'] == '/v1/a3/c1/obj':
+            return Response(status='201 Created')(env, start_response)
+        elif env['PATH_INFO'] == '/v1/a3/c2':
+            headers = {
+                'X-Container-Object-Count': 200000,
+                'X-Container-Bytes-Used': 1024,
+            }
+            return Response(status='204 No Content', headers=headers)(
+                env, start_response)
+        elif env['PATH_INFO'] == '/v1/a4':
+            headers = {
+                'X-Account-Container-Count': 2,
+                'X-Account-Object-Count': 100,
+                'X-Account-Bytes-Used': 1024,
+                'X-Account-Meta-Quota': 'L1',
+            }
+            return Response(status='200 OK', headers=headers)(
+                env, start_response)
+        elif env['PATH_INFO'] == '/v1/a4/c':
+            headers = {
+                'X-Container-Object-Count': 100050,
+                'X-Container-Bytes-Used': 1024,
+            }
+            return Response(status='204 No Content', headers=headers)(
+                env, start_response)
+        elif env['PATH_INFO'] == '/v1/a4/c/obj':
+            return Response(status='201 Created')(env, start_response)
 
 
 class TestReadConfiguration(unittest.TestCase):
@@ -204,7 +309,7 @@ class TestQuota(unittest.TestCase):
         resp = Request.blank('/v1/a').get_response(qa)
         self.assertEquals(resp.status_int, 401)
 
-    def test_container_quota_default_ok(self):
+    def test_container_count_quota_default_ok(self):
         qa = quota.filter_factory(self.conf)(FakeApp())
         req = Request.blank('/v1/a-c2-qdefault/c')
         req.method = 'PUT'
@@ -219,7 +324,7 @@ class TestQuota(unittest.TestCase):
         resp = req.get_response(qa)
         self.assertEquals(resp.status_int, 201)
 
-    def test_container_quota_default_boundary(self):
+    def test_container_count_quota_default_boundary(self):
         qa = quota.filter_factory(self.conf)(FakeApp())
         req = Request.blank('/v1/a-c4-qdefault/c')
         req.method = 'PUT'
@@ -234,7 +339,7 @@ class TestQuota(unittest.TestCase):
         resp = req.get_response(qa)
         self.assertEquals(resp.status_int, 201)
 
-    def test_container_quota_default_fail(self):
+    def test_container_count_quota_default_fail(self):
         qa = quota.filter_factory(self.conf)(FakeApp())
         req = Request.blank('/v1/a-c5-qdefault/c')
         req.method = 'PUT'
@@ -252,7 +357,7 @@ class TestQuota(unittest.TestCase):
         self.assertEquals(resp.status_int, 403)
         self.assertEquals(resp.body, 'The number of container is over quota')
 
-    def test_container_quota_l1_ok(self):
+    def test_container_count_quota_l1_ok(self):
         qa = quota.filter_factory(self.conf)(FakeApp())
         req = Request.blank('/v1/a-c8-ql1/c')
         req.method = 'PUT'
@@ -267,7 +372,7 @@ class TestQuota(unittest.TestCase):
         resp = req.get_response(qa)
         self.assertEquals(resp.status_int, 201)
 
-    def test_container_quota_error_key(self):
+    def test_container_count_quota_error_key(self):
         self.conf['quota'] = json.dumps(
             {
                 'container_count': {
@@ -297,6 +402,198 @@ class TestQuota(unittest.TestCase):
         # cached
         resp = req.get_response(qa)
         self.assertEquals(resp.status_int, 201)
+
+    def test_container_usage_default_ok(self):
+        qa = quota.filter_factory(self.conf)(FakeApp())
+        req = Request.blank('/v1/a1/c/obj')
+        req.method = 'PUT'
+        req.environ['CONTENT_LENGTH'] = 1024
+        # no memcached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+        # no cache
+        req.environ['swift.cache'] = FakeMemcache()
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+        # cached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+        ###############
+        # test 500
+        ###############
+        req = Request.blank('/v1/a1/c/obj1')
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 500)
+
+    def test_container_usage_default_boundary(self):
+        qa = quota.filter_factory(self.conf)(FakeApp())
+        req = Request.blank('/v1/a1/c2/obj')
+        req.method = 'PUT'
+        req.environ['CONTENT_LENGTH'] = 1024
+        # no memcached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+        # no cache
+        req.environ['swift.cache'] = FakeMemcache()
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+        # cached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+
+    def test_container_usage_default_fail(self):
+        qa = quota.filter_factory(self.conf)(FakeApp())
+        req = Request.blank('/v1/a1/c2/obj')
+        req.environ['CONTENT_LENGTH'] = 1025
+        req.method = 'PUT'
+        # no memcached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 403)
+        self.assertEquals(resp.body, 'The usage of container is over quota')
+        # no cache
+        req.environ['swift.cache'] = FakeMemcache()
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 403)
+        self.assertEquals(resp.body, 'The usage of container is over quota')
+        # cached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 403)
+        self.assertEquals(resp.body, 'The usage of container is over quota')
+        ########################
+        # already over quota
+        ########################
+        req = Request.blank('/v1/a1/c3/obj')
+        req.method = 'PUT'
+        req.environ['CONTENT_LENGTH'] = 1023
+        # no memcached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 403)
+        self.assertEquals(resp.body, 'The usage of container is over quota')
+        # no cache
+        req.environ['swift.cache'] = FakeMemcache()
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 403)
+        self.assertEquals(resp.body, 'The usage of container is over quota')
+        # cached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 403)
+        self.assertEquals(resp.body, 'The usage of container is over quota')
+
+    def test_container_usage_l1_ok(self):
+        qa = quota.filter_factory(self.conf)(FakeApp())
+        req = Request.blank('/v1/a2/c/obj')
+        req.method = 'PUT'
+        req.environ['CONTENT_LENGTH'] = 1024
+        # no memcached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+        # no cache
+        req.environ['swift.cache'] = FakeMemcache()
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+        # cached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+
+    def test_container_usage_error_key(self):
+        self.conf['quota'] = json.dumps(
+            {
+                'container_count': {
+                    'default': 5,
+                    'L10': 10
+                },
+                'object_count': {
+                    'default': 5,
+                    'L10': 10
+                },
+                'container_usage': {
+                    'default': 5,
+                    'L10': 10
+                }
+            }
+        )
+        qa = quota.filter_factory(self.conf)(FakeApp())
+        req = Request.blank('/v1/a2/c/obj')
+        req.method = 'PUT'
+        req.environ['CONTENT_LENGTH'] = 1024
+        # no memcached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+        # no cache
+        req.environ['swift.cache'] = FakeMemcache()
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+        # cached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+
+    def test_object_count_default_ok(self):
+        qa = quota.filter_factory(self.conf)(FakeApp())
+        req = Request.blank('/v1/a3/c/obj')
+        req.method = 'PUT'
+        req.environ['CONTENT_LENGTH'] = 1024
+        # no memcached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+        # no cache
+        req.environ['swift.cache'] = FakeMemcache()
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+        # cached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+
+    def test_object_count_default_boundary(self):
+        qa = quota.filter_factory(self.conf)(FakeApp())
+        req = Request.blank('/v1/a3/c1/obj')
+        req.method = 'PUT'
+        req.environ['CONTENT_LENGTH'] = 1024
+        # no memcached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+        # no cache
+        req.environ['swift.cache'] = FakeMemcache()
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+        # cached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+
+    def test_object_count_default_fail(self):
+        qa = quota.filter_factory(self.conf)(FakeApp())
+        req = Request.blank('/v1/a3/c2/obj')
+        req.method = 'PUT'
+        req.environ['CONTENT_LENGTH'] = 1024
+        # no memcached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 403)
+        self.assertEquals(resp.body, 'The usage of container is over quota')
+        # no cache
+        req.environ['swift.cache'] = FakeMemcache()
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 403)
+        self.assertEquals(resp.body, 'The usage of container is over quota')
+        # cached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 403)
+        self.assertEquals(resp.body, 'The usage of container is over quota')
+
+    def test_object_count_l1_ok(self):
+        qa = quota.filter_factory(self.conf)(FakeApp())
+        req = Request.blank('/v1/a4/c/obj')
+        req.method = 'PUT'
+        req.environ['CONTENT_LENGTH'] = 1024
+        # no memcached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+        # no cache
+        req.environ['swift.cache'] = FakeMemcache()
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+        # cached
+        resp = req.get_response(qa)
+        self.assertEquals(resp.status_int, 201)
+
 
 if __name__ == '__main__':
     unittest.main()
