@@ -28,7 +28,7 @@ class Quota(object):
     Add to your pipeline in proxy-server.conf, such as::
 
         [pipeline:main]
-        pipeline = catch_errors cache tempauth quota proxy-server
+        pipeline = catch_errors cache token auth quota proxy-server
 
     And add a quota filter section, such as::
 
