@@ -165,6 +165,15 @@ class KeystoneAuth(object):
             req.environ['swift_owner'] = True
             return
 
+        # Quota for StackLab.
+        # filter the 'x-account-meta-quota'
+        # make sure that the header set by reseller admin.
+        if not container and req.method in ('POST', 'PUT') \
+                and req.headers.get('x-account-meta-quota') is not None:
+            self.logger.debug(
+                'keystoneauth.authorize: no privilege to change quota')
+            return self.denied_response(req)
+
         # Check if a user tries to access an account that does not match their
         # token
         if not self._reseller_check(account, tenant_id):

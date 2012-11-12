@@ -48,7 +48,7 @@ class SwiftAuth(unittest.TestCase):
         return webob.Request.blank(path, headers=headers, **kwargs)
 
     def _get_identity_headers(self, status='Confirmed', tenant_id='1',
-                          tenant_name='acct', user='usr', role=''):
+                              tenant_name='acct', user='usr', role=''):
         return dict(X_IDENTITY_STATUS=status,
                     X_TENANT_ID=tenant_id,
                     X_TENANT_NAME=tenant_name,
@@ -111,6 +111,25 @@ class SwiftAuth(unittest.TestCase):
                                  environ={'swift.authorize_override': True})
         resp = req.get_response(self.test_auth)
         self.assertEquals(resp.status_int, 404)
+
+    def test_quota_without_resller_admin_not_allowed(self): 
+        headers = self._get_identity_headers(role='123')
+        headers['x-account-meta-quota'] = 'L1'
+        req = self._make_request('/v1/AUTH_account', headers=headers)
+        req.method = 'PUT'
+        resp = req.get_response(self.test_auth)
+        self.assertEquals(resp.status_int, 403)
+        req.method = 'POST'
+        resp = req.get_response(self.test_auth)
+        self.assertEquals(resp.status_int, 403)
+
+    def test_quota_with_resller_admin_allowed(self):
+        headers = self._get_identity_headers(
+            role=self.test_auth.reseller_admin_role)
+        headers['x-account-meta-quota'] = 'L1'
+        req = self._make_request('/v1/AUTH_account', headers=headers)
+        resp = req.get_response(self._get_successful_middleware())
+        self.assertEquals(resp.status_int, 200)
 
 
 class TestAuthorize(unittest.TestCase):
