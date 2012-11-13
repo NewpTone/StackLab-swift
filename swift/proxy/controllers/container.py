@@ -34,7 +34,7 @@ from swift.common.utils import normalize_timestamp, public
 from swift.common.constraints import check_metadata, MAX_CONTAINER_NAME_LENGTH
 from swift.common.http import HTTP_ACCEPTED
 from swift.proxy.controllers.base import Controller, delay_denial, \
-    get_container_memcache_key
+    get_container_memcache_key, get_account_memcache_key
 
 
 class ContainerController(Controller):
@@ -150,6 +150,9 @@ class ContainerController(Controller):
             cache_key = get_container_memcache_key(self.account_name,
                                                    self.container_name)
             self.app.memcache.delete(cache_key)
+            self.app.memcache.delete(
+                get_account_memcache_key(self.account_name))
+
         resp = self.make_requests(req, self.app.container_ring,
                 container_partition, 'PUT', req.path_info, headers)
         return resp
@@ -202,6 +205,9 @@ class ContainerController(Controller):
             cache_key = get_container_memcache_key(self.account_name,
                                                    self.container_name)
             self.app.memcache.delete(cache_key)
+            self.app.memcache.delete(
+                get_account_memcache_key(self.account_name))
+
         resp = self.make_requests(req, self.app.container_ring,
                     container_partition, 'DELETE', req.path_info, headers)
         # Indicates no server had the container

@@ -146,8 +146,8 @@ class Quota(object):
             if is_success(result_code):
                 headers = dict(res[1])
                 container_count = int(
-                    headers.get('X-Account-Container-Count') or 0)
-                quota_level = headers.get('X-Account-Meta-Quota') or 'default'
+                    headers.get('x-account-container-count') or 0)
+                quota_level = headers.get('x-account-meta-quota') or 'default'
                 if memcache_client:
                     memcache_client.set(
                         account_key,
@@ -210,13 +210,13 @@ class Quota(object):
             if is_success(result_code):
                 headers = dict(res[1])
                 container_usage = int(
-                    headers.get('X-Container-Bytes-Used') or 0)
+                    headers.get('x-container-bytes-used') or 0)
                 object_count = int(
-                    headers.get('X-Container-Object-Count') or 0)
-                read_acl = headers.get('X-Container-Read') or ''
-                write_acl = headers.get('X-Container-Write') or ''
-                sync_key = headers.get('X-Container-Sync-Key') or ''
-                container_version = headers.get('X-Versions-Location') or ''
+                    headers.get('x-container-object-count') or 0)
+                read_acl = headers.get('x-container-read') or ''
+                write_acl = headers.get('x-container-write') or ''
+                sync_key = headers.get('x-container-sync-key') or ''
+                container_version = headers.get('x-versions-location') or ''
                 if memcache_client:
                     memcache_client.set(
                         container_key,
@@ -272,8 +272,16 @@ class Quota(object):
             object_count_quota = None
         container_usage, object_count = self._get_container_meta(
             env, version, account, container)
-        if container_usage_quota and (container_usage + object_size >
-                                      container_usage_quota):
+        if container_usage_quota and container_usage >= container_usage_quota:
+            self.logger.notice("Container usage over quota, "
+                               "request[PUT %s/%s/%s], container_usage[%s] "
+                               "object_size[%s] quota[%s]" % (
+                                   account, container, obj, container_usage,
+                                   object_size, container_usage_quota))
+            return HTTPForbidden(body="The usage of container is over quota")(
+                env, start_response)
+        elif container_usage_quota and (container_usage + object_size >
+                                        container_usage_quota):
             self.logger.notice("Container usage over quota, "
                                "request[PUT %s/%s/%s], container_usage[%s] "
                                "object_size[%s] quota[%s]" % (
@@ -286,7 +294,7 @@ class Quota(object):
                                "object_count[%s] quota[%s]" % (
                                    account, container, obj, object_count + 1,
                                    object_count_quota))
-            return HTTPForbidden(body="The usage of container is over quota")(
+            return HTTPForbidden(body="The count of object is over quota")(
                 env, start_response)
         else:
             return self.app(env, start_response)

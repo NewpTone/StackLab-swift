@@ -71,9 +71,9 @@ class FakeApp(object):
             return Response(status='401 Unauthorized')(env, start_response)
         elif env['PATH_INFO'] == '/v1/a-c2-qdefault':
             headers = {
-                'X-Account-Container-Count': 2,
-                'X-Account-Object-Count': 100,
-                'X-Account-Bytes-Used': 1024,
+                'x-account-container-count': 2,
+                'x-account-object-count': 100,
+                'x-account-bytes-used': 1024,
             }
             return Response(status='200 OK', headers=headers)(
                 env, start_response)
@@ -81,9 +81,9 @@ class FakeApp(object):
             return Response(status='201 Created')(env, start_response)
         elif env['PATH_INFO'] == '/v1/a-c4-qdefault':
             headers = {
-                'X-Account-Container-Count': 4,
-                'X-Account-Object-Count': 100,
-                'X-Account-Bytes-Used': 1024,
+                'x-account-container-count': 4,
+                'x-account-object-count': 100,
+                'x-account-bytes-used': 1024,
             }
             return Response(status='200 OK', headers=headers)(
                 env, start_response)
@@ -91,18 +91,18 @@ class FakeApp(object):
             return Response(status='201 Created')(env, start_response)
         elif env['PATH_INFO'] == '/v1/a-c5-qdefault':
             headers = {
-                'X-Account-Container-Count': 5,
-                'X-Account-Object-Count': 100,
-                'X-Account-Bytes-Used': 1024,
+                'x-account-container-count': 5,
+                'x-account-object-count': 100,
+                'x-account-bytes-used': 1024,
             }
             return Response(status='200 OK', headers=headers)(
                 env, start_response)
         elif env['PATH_INFO'] == '/v1/a-c8-ql1':
             headers = {
-                'X-Account-Container-Count': 8,
-                'X-Account-Object-Count': 100,
-                'X-Account-Bytes-Used': 1024,
-                'X-Account-Meta-Quota': 'L1',
+                'x-account-container-count': 8,
+                'x-account-object-count': 100,
+                'x-account-bytes-used': 1024,
+                'x-account-meta-quota': 'L1',
             }
             return Response(status='200 OK', headers=headers)(
                 env, start_response)
@@ -110,16 +110,16 @@ class FakeApp(object):
             return Response(status='201 Created')(env, start_response)
         elif env['PATH_INFO'] == '/v1/a1':
             headers = {
-                'X-Account-Container-Count': 2,
-                'X-Account-Object-Count': 100,
-                'X-Account-Bytes-Used': 1024,
+                'x-account-container-count': 2,
+                'x-account-object-count': 100,
+                'x-account-bytes-used': 1024,
             }
             return Response(status='200 OK', headers=headers)(
                 env, start_response)
         elif env['PATH_INFO'] == '/v1/a1/c':
             headers = {
-                'X-Container-Object-Count': 100,
-                'X-Container-Bytes-Used': 200,
+                'x-container-object-count': 100,
+                'x-container-bytes-used': 200,
             }
             return Response(status='204 No Content', headers=headers)(
                 env, start_response)
@@ -130,8 +130,8 @@ class FakeApp(object):
                 env, start_response)
         elif env['PATH_INFO'] == '/v1/a1/c2':
             headers = {
-                'X-Container-Object-Count': 100,
-                'X-Container-Bytes-Used': 2147483648 - 1024,
+                'x-container-object-count': 100,
+                'x-container-bytes-used': 2147483648 - 1024,
             }
             return Response(status='204 No Content', headers=headers)(
                 env, start_response)
@@ -139,24 +139,24 @@ class FakeApp(object):
             return Response(status='201 Created')(env, start_response)
         elif env['PATH_INFO'] == '/v1/a1/c3':
             headers = {
-                'X-Container-Object-Count': 100,
-                'X-Container-Bytes-Used': 2147483648 + 1024,
+                'x-container-object-count': 100,
+                'x-container-bytes-used': 2147483648 + 1024,
             }
             return Response(status='204 No Content', headers=headers)(
                 env, start_response)
         elif env['PATH_INFO'] == '/v1/a2':
             headers = {
-                'X-Account-Container-Count': 2,
-                'X-Account-Object-Count': 100,
-                'X-Account-Bytes-Used': 1024,
-                'X-Account-Meta-Quota': 'L1'
+                'x-account-container-count': 2,
+                'x-account-object-count': 100,
+                'x-account-bytes-used': 1024,
+                'x-account-meta-quota': 'L1'
             }
             return Response(status='200 OK', headers=headers)(
                 env, start_response)
         elif env['PATH_INFO'] == '/v1/a2/c':
             headers = {
-                'X-Container-Object-Count': 100,
-                'X-Container-Bytes-Used': 2147483648,
+                'x-container-object-count': 100,
+                'x-container-bytes-used': 2147483648,
             }
             return Response(status='204 No Content', headers=headers)(
                 env, start_response)
@@ -164,16 +164,16 @@ class FakeApp(object):
             return Response(status='201 Created')(env, start_response)
         elif env['PATH_INFO'] == '/v1/a3':
             headers = {
-                'X-Account-Container-Count': 2,
-                'X-Account-Object-Count': 100,
-                'X-Account-Bytes-Used': 1024,
+                'x-account-container-count': 2,
+                'x-account-object-count': 100,
+                'x-account-bytes-used': 1024,
             }
             return Response(status='200 OK', headers=headers)(
                 env, start_response)
         elif env['PATH_INFO'] == '/v1/a3/c':
             headers = {
-                'X-Container-Object-Count': 100,
-                'X-Container-Bytes-Used': 1024,
+                'x-container-object-count': 100,
+                'x-container-bytes-used': 1024,
             }
             return Response(status='204 No Content', headers=headers)(
                 env, start_response)
@@ -181,8 +181,8 @@ class FakeApp(object):
             return Response(status='201 Created')(env, start_response)
         elif env['PATH_INFO'] == '/v1/a3/c1':
             headers = {
-                'X-Container-Object-Count': 99999,
-                'X-Container-Bytes-Used': 1024,
+                'x-container-object-count': 99999,
+                'x-container-bytes-used': 1024,
             }
             return Response(status='204 No Content', headers=headers)(
                 env, start_response)
@@ -190,24 +190,24 @@ class FakeApp(object):
             return Response(status='201 Created')(env, start_response)
         elif env['PATH_INFO'] == '/v1/a3/c2':
             headers = {
-                'X-Container-Object-Count': 200000,
-                'X-Container-Bytes-Used': 1024,
+                'x-container-object-count': 200000,
+                'x-container-bytes-used': 1024,
             }
             return Response(status='204 No Content', headers=headers)(
                 env, start_response)
         elif env['PATH_INFO'] == '/v1/a4':
             headers = {
-                'X-Account-Container-Count': 2,
-                'X-Account-Object-Count': 100,
-                'X-Account-Bytes-Used': 1024,
-                'X-Account-Meta-Quota': 'L1',
+                'x-account-container-count': 2,
+                'x-account-object-count': 100,
+                'x-account-bytes-used': 1024,
+                'x-account-meta-quota': 'L1',
             }
             return Response(status='200 OK', headers=headers)(
                 env, start_response)
         elif env['PATH_INFO'] == '/v1/a4/c':
             headers = {
-                'X-Container-Object-Count': 100050,
-                'X-Container-Bytes-Used': 1024,
+                'x-container-object-count': 100050,
+                'x-container-bytes-used': 1024,
             }
             return Response(status='204 No Content', headers=headers)(
                 env, start_response)
@@ -567,16 +567,16 @@ class TestQuota(unittest.TestCase):
         # no memcached
         resp = req.get_response(qa)
         self.assertEquals(resp.status_int, 403)
-        self.assertEquals(resp.body, 'The usage of container is over quota')
+        self.assertEquals(resp.body, 'The count of object is over quota')
         # no cache
         req.environ['swift.cache'] = FakeMemcache()
         resp = req.get_response(qa)
         self.assertEquals(resp.status_int, 403)
-        self.assertEquals(resp.body, 'The usage of container is over quota')
+        self.assertEquals(resp.body, 'The count of object is over quota')
         # cached
         resp = req.get_response(qa)
         self.assertEquals(resp.status_int, 403)
-        self.assertEquals(resp.body, 'The usage of container is over quota')
+        self.assertEquals(resp.body, 'The count of object is over quota')
 
     def test_object_count_l1_ok(self):
         qa = quota.filter_factory(self.conf)(FakeApp())

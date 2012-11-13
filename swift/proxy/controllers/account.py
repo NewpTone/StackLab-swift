@@ -34,7 +34,7 @@ from webob import Request
 from swift.common.utils import normalize_timestamp, public
 from swift.common.constraints import check_metadata, MAX_ACCOUNT_NAME_LENGTH
 from swift.common.http import is_success, HTTP_NOT_FOUND
-from swift.proxy.controllers.base import Controller
+from swift.proxy.controllers.base import Controller, get_account_memcache_key
 
 
 class AccountController(Controller):
@@ -92,7 +92,8 @@ class AccountController(Controller):
                    'Connection': 'close'}
         self.transfer_headers(req.headers, headers)
         if self.app.memcache:
-            self.app.memcache.delete('account%s' % req.path_info.rstrip('/'))
+            self.app.memcache.delete(
+                get_account_memcache_key(self.account_name))
         resp = self.make_requests(req, self.app.account_ring,
             account_partition, 'PUT', req.path_info, [headers] * len(accounts))
         return resp
@@ -110,7 +111,8 @@ class AccountController(Controller):
                    'Connection': 'close'}
         self.transfer_headers(req.headers, headers)
         if self.app.memcache:
-            self.app.memcache.delete('account%s' % req.path_info.rstrip('/'))
+            self.app.memcache.delete(
+                get_account_memcache_key(self.account_name))
         resp = self.make_requests(req, self.app.account_ring,
             account_partition, 'POST', req.path_info,
             [headers] * len(accounts))
@@ -141,7 +143,8 @@ class AccountController(Controller):
                    'X-Trans-Id': self.trans_id,
                    'Connection': 'close'}
         if self.app.memcache:
-            self.app.memcache.delete('account%s' % req.path_info.rstrip('/'))
+            self.app.memcache.delete(
+                get_account_memcache_key(self.account_name))
         resp = self.make_requests(req, self.app.account_ring,
             account_partition, 'DELETE', req.path_info,
             [headers] * len(accounts))
