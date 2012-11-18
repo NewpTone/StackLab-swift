@@ -280,6 +280,7 @@ class TestQuota(unittest.TestCase):
             'log_name': 'quota',
             'cache_timeout': 500,
             'log_level': 'DEBUG',
+            'precise_mode': 'False'
         }
 
     def test_app_set(self):
@@ -299,6 +300,10 @@ class TestQuota(unittest.TestCase):
         self.conf.pop('cache_timeout')
         qa = quota.filter_factory(self.conf)(FakeApp())
         self.assertEquals(qa.cache_timeout, 300)
+
+    def test_precise_mode(self):
+        qa = quota.filter_factory(self.conf)(FakeApp())
+        self.assertEquals(qa.precise_mode, False)
 
     def test_invalid_path(self):
         qa = quota.filter_factory(self.conf)(FakeApp())

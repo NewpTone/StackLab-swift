@@ -35,6 +35,9 @@ class Quota(object):
         [filter:tempauth]
         use = egg:swift#quota
         cache_timeout = 300
+        # If set precise_mode = true, the quota middleware will disable the
+        # cache.
+        precise_mode = false
         set log_name = quota
         quota = {
             "container_count": {
@@ -62,6 +65,7 @@ class Quota(object):
         self.app = app
         self.logger = get_logger(conf, log_route=conf.get('log_name', 'quota'))
         self.cache_timeout = int(conf.get('cache_timeout', 300))
+        self.precise_mode = conf.get('precise_mode', None) in ('True', 'true')
         try:
             quota = json.loads(conf.get('quota') or "{}")
             self.container_count = quota['container_count']
@@ -98,7 +102,7 @@ class Quota(object):
                 new_env[name] = env[name]
         return new_env
 
-    def _get_account_meta(self, env, version, account):
+    def _get_account_meta(self, env, version, account, memcache_client):
         """
         Get metadata of account.
 
@@ -107,7 +111,6 @@ class Quota(object):
         :param account: The name of account
         :return: tuple of (container_count, quota_level) or (None, None)
         """
-        memcache_client = cache_from_env(env)
         value = None
         quota_level = None
         container_count = None
@@ -162,7 +165,8 @@ class Quota(object):
             else:
                 return None, None
 
-    def _get_container_meta(self, env, version, account, container):
+    def _get_container_meta(self, env, version, account, container,
+                            memcache_client):
         """
         Get metadata of account.
 
@@ -172,7 +176,6 @@ class Quota(object):
         :param container: The name of container
         :return: tuple of (container_usage, object_count) or (None, None)
         """
-        memcache_client = cache_from_env(env)
         value = None
         container_usage = None
         object_count = None
@@ -238,8 +241,9 @@ class Quota(object):
     def handle_quota_container(self, env, start_response, version, account,
                                container):
         """ Container Count Quota """
+        memcache_client = cache_from_env(env)
         container_count, quota_level = self._get_account_meta(
-            env, version, account)
+            env, version, account, memcache_client)
         try:
             quota = self.container_count[quota_level]
         except Exception:
@@ -253,15 +257,32 @@ class Quota(object):
                                    quota))
             return HTTPForbidden(body="The number of container is over quota")(
                 env, start_response)
+        elif self.precise_mode and memcache_client:
+            res = [None, None, None]
+            result_code = None
+
+            def _start_response(response_status, response_headers,
+                                exc_info=None):
+                res[0] = response_status
+                res[1] = response_headers
+                res[2] = exc_info
+
+            resp = self.app(env, _start_response)
+            result_code = self._get_status_int(res[0])
+            if is_success(result_code):
+                memcache_client.delete(get_account_memcache_key(account))
+            start_response(res[0], res[1], res[2])
+            return resp
         else:
             return self.app(env, start_response)
 
     def handle_quota_object(self, env, start_response, version, account,
                             container, obj):
         """ Handle quota of container usage and object count. """
+        memcache_client = cache_from_env(env)
         object_size = int(env.get('CONTENT_LENGTH') or 0)
         container_count, quota_level = self._get_account_meta(
-            env, version, account)
+            env, version, account, memcache_client)
         try:
             container_usage_quota = self.container_usage[quota_level]
             object_count_quota = self.object_count[quota_level]
@@ -271,7 +292,7 @@ class Quota(object):
             container_usage_quota = None
             object_count_quota = None
         container_usage, object_count = self._get_container_meta(
-            env, version, account, container)
+            env, version, account, container, memcache_client)
         if container_usage_quota and container_usage >= container_usage_quota:
             self.logger.notice("Container usage over quota, "
                                "request[PUT %s/%s/%s], container_usage[%s] "
@@ -296,8 +317,55 @@ class Quota(object):
                                    object_count_quota))
             return HTTPForbidden(body="The count of object is over quota")(
                 env, start_response)
+        elif self.precise_mode and memcache_client:
+            res = [None, None, None]
+            result_code = None
+
+            def _start_response(response_status, response_headers,
+                                exc_info=None):
+                res[0] = response_status
+                res[1] = response_headers
+                res[2] = exc_info
+
+            resp = self.app(env, _start_response)
+            result_code = self._get_status_int(res[0])
+            if is_success(result_code):
+                memcache_client.delete(
+                    get_container_memcache_key(account, container))
+            start_response(res[0], res[1], res[2])
+            return resp
         else:
             return self.app(env, start_response)
+
+    def handle_delete(self, env, start_response, version, account, container,
+                      obj):
+        """ Handle delete request. """
+        memcache_client = cache_from_env(env)
+        if not memcache_client:
+            return self.app(env, start_response)
+
+        res = [None, None, None]
+        result_code = None
+
+        def _start_response(response_status, response_headers, exc_info=None):
+            res[0] = response_status
+            res[1] = response_headers
+            res[2] = exc_info
+
+        resp = self.app(env, _start_response)
+        result_code = self._get_status_int(res[0])
+        try:
+            if is_success(result_code):
+                if obj:
+                    memcache_client.delete(
+                        get_container_memcache_key(account, container))
+                else:
+                    memcache_client.delete(get_account_memcache_key(account))
+        except Exception, err:
+            self.logger.error(
+                'Error in [Quota] delete cache: %s' % (err.message))
+        start_response(res[0], res[1], res[2])
+        return resp
 
     def __call__(self, env, start_response):
         """
@@ -318,6 +386,10 @@ class Quota(object):
             if obj and container:
                 return self.handle_quota_object(
                     env, start_response, version, account, container, obj)
+        elif env['REQUEST_METHOD'] == 'DELETE':
+            if self.precise_mode and container:
+                return self.handle_delete(env, start_response, version, account,
+                                          container, obj)
         return self.app(env, start_response)
 
 
