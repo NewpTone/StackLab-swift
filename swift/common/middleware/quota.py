@@ -388,7 +388,7 @@ class Quota(object):
                     env, start_response, version, account, container, obj)
         elif env['REQUEST_METHOD'] == 'DELETE':
             if self.precise_mode and container:
-                return self.handle_delete(env, start_response, version, account,
+                return self.handle_delete(env, start_response, account,
                                           container, obj)
         return self.app(env, start_response)
 
